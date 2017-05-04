@@ -26,33 +26,28 @@ import java.util.*;
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback, GoogleApiClient.OnConnectionFailedListener,
         GoogleMap.OnMapLongClickListener, ConnectionCallbacks, View.OnClickListener {
 
-    private GoogleMap objGoogleMap;
-    private boolean bolLocationPermissionGranted;
     private final int PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 1306;
     private final int DEFAULT_ZOOM = 15;
+    private final String MARKER_LIST = "MARKER_LIST";
+    private final FragmentActivity ACTIVITY = this;
+    private final String START_POLYGON = "Start Polygon";
+    private final String END_POLYGON = "End Polygon";
+    private GoogleMap objGoogleMap;
+    private boolean bolLocationPermissionGranted;
     private Location objLastKnownLocation;
     private GoogleApiClient objGoogleApiClient;
     private CameraPosition objCameraPosition;
     private List<MarkerOptions> lstMarker;
-    private final String MARKER_LIST = "MARKER_LIST";
-    private final FragmentActivity ACTIVITY = this;
-
-    // Toast wrapper
-    private void showToast(final String strMessage) {
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                Toast objToast = Toast.makeText(ACTIVITY, strMessage, Toast.LENGTH_SHORT);
-                objToast.show();
-            }
-        });
-    }
+    private PolygonOptions objPolygonOptions;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         try {
             super.onCreate(savedInstanceState);
             setContentView(R.layout.activity_maps);
+            Button btnPolygon = (Button) findViewById(R.id.btnPolygon);
+            btnPolygon.setText(START_POLYGON);
+            btnPolygon.setBackground(ContextCompat.getDrawable(this, R.color.colorStartPolygon));
             SetMarkerList();
 
             objGoogleApiClient = new GoogleApiClient.Builder(this)
@@ -69,6 +64,17 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
     }
 
+    // Toast wrapper
+    private void showToast(final String strMessage) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                Toast objToast = Toast.makeText(ACTIVITY, strMessage, Toast.LENGTH_SHORT);
+                objToast.show();
+            }
+        });
+    }
+
     private void SetMarkerList() {
         SharedPreferences objPreferences = getPreferences(MODE_PRIVATE);
         String strJSON = objPreferences.getString(MARKER_LIST, "");
@@ -78,7 +84,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         } else {
             Gson objGson = new Gson();
             MarkerOptions[] arrMarker = objGson.fromJson(strJSON, MarkerOptions[].class);
-            lstMarker = Arrays.asList(arrMarker);
+            lstMarker = new ArrayList<>(Arrays.asList(arrMarker));
         }
     }
 
@@ -189,27 +195,65 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     @Override
     public void onClick(View v) {
-        int intID = v.getId();
+        try {
+            int intID = v.getId();
 
-        if (intID == R.id.btnClearMarkers) {
-            objGoogleMap.clear();
-            lstMarker = new ArrayList<MarkerOptions>();
-            saveMarkers();
-        } else {
+            if (intID == R.id.btnClearMarkers) {
+                objGoogleMap.clear();
+                lstMarker = new ArrayList<MarkerOptions>();
+                saveMarkers();
+            } else {
+                clickPolygon(v);
+            }
+        } catch (Exception ex) {
+            showToast("Error: " + ex.getMessage());
+            Log.e("onClick", "Exception", ex);
+        }
+    }
+
+    private void clickPolygon(View v) {
+        Button btnPolygon = (Button) v;
+
+        // Start polygon
+        if (btnPolygon.getText().equals(START_POLYGON)) {
+            btnPolygon.setText(END_POLYGON);
+            btnPolygon.setBackground(ContextCompat.getDrawable(this, R.color.colorEndPolygon));
+            objPolygonOptions = new PolygonOptions();
+        }
+        // End polygon
+        else {
+            btnPolygon.setText(START_POLYGON);
+            btnPolygon.setBackground(ContextCompat.getDrawable(this, R.color.colorStartPolygon));
+
+            // Only draw polygon if there are at least 3 points
+            if (objPolygonOptions.getPoints().size() > 2) {
+                Polygon objPolyline = objGoogleMap.addPolygon(objPolygonOptions);
+                objPolyline.setFillColor(0x7F00FF00);
+            } else {
+                showToast("Not enough points to form a polygon");
+            }
+
+            objPolygonOptions = null;
         }
     }
 
     @Override
-    public void onMapLongClick(LatLng latLng) {
+    public void onMapLongClick(LatLng objLatLng) {
         try {
+            Button btnPolygon = (Button) findViewById(R.id.btnPolygon);
             EditText txtMessage = (EditText) findViewById(R.id.txtMessage);
             String strMessage = txtMessage.getText().toString();
             MarkerOptions objMarker = new MarkerOptions()
-                    .position(latLng)
+                    .position(objLatLng)
                     .title(strMessage);
             objGoogleMap.addMarker(objMarker);
-            lstMarker.add(objMarker);
-            saveMarkers();
+
+            if (btnPolygon.getText().equals(START_POLYGON)) {
+                lstMarker.add(objMarker);
+                saveMarkers();
+            } else {
+                objPolygonOptions.add(objLatLng);
+            }
         } catch (Exception ex) {
             showToast("Error: " + ex.getMessage());
             Log.e("onMapLongClick", "Exception", ex);

@@ -1,3 +1,4 @@
 1. Get current location and show on map: https://developers.google.com/maps/documentation/android-api/current-place-tutorial
 2. Using Gson library to convert objects to JSON and store in SharedPreferences: http://stackoverflow.com/questions/7145606/how-android-sharedpreferences-save-store-object
 3. Remove all markers: http://stackoverflow.com/questions/1544739/google-maps-api-v3-how-to-remove-all-markers
+4. Make polygon transparent: http://stackoverflow.com/questions/19241329/polygon-fill-is-not-semi-transparent-android-maps-v2

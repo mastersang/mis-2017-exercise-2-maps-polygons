@@ -3,25 +3,42 @@ package buw.maps_and_polygons;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.location.Location;
-import android.support.annotation.*;
-import android.support.v4.app.*;
 import android.os.Bundle;
-import android.support.v4.content.*;
-import android.text.*;
-import android.util.*;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.app.FragmentActivity;
+import android.support.v4.content.ContextCompat;
+import android.text.TextUtils;
+import android.util.Log;
 import android.view.View;
-import android.widget.*;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
-import com.google.android.gms.common.api.*;
-import com.google.android.gms.common.api.GoogleApiClient.*;
-import com.google.android.gms.location.*;
-import com.google.android.gms.location.places.*;
-import com.google.android.gms.maps.*;
-import com.google.android.gms.maps.model.*;
-import com.google.gson.*;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.common.api.GoogleApiClient.ConnectionCallbacks;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.places.Places;
+import com.google.android.gms.maps.CameraUpdateFactory;
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.OnMapReadyCallback;
+import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.CameraPosition;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.Polygon;
+import com.google.android.gms.maps.model.PolygonOptions;
+import com.google.gson.Gson;
 
-import java.util.*;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
 
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback, GoogleApiClient.OnConnectionFailedListener,
         GoogleMap.OnMapLongClickListener, ConnectionCallbacks, View.OnClickListener {
@@ -32,6 +49,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private final FragmentActivity ACTIVITY = this;
     private final String START_POLYGON = "Start Polygon";
     private final String END_POLYGON = "End Polygon";
+    private final double LATLNG_TO_METER_RATE = 111000000000.0;
+    private final double MAX_SQUARE_METER = 1000000;
     private GoogleMap objGoogleMap;
     private boolean bolLocationPermissionGranted;
     private Location objLastKnownLocation;
@@ -202,8 +221,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 objGoogleMap.clear();
                 lstMarker = new ArrayList<MarkerOptions>();
                 saveMarkers();
+                objPolygonOptions = new PolygonOptions();
             } else {
-                clickPolygon(v);
+                clickPolygonButton(v);
             }
         } catch (Exception ex) {
             showToast("Error: " + ex.getMessage());
@@ -211,7 +231,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
     }
 
-    private void clickPolygon(View v) {
+    private void clickPolygonButton(View v) {
         Button btnPolygon = (Button) v;
 
         // Start polygon
@@ -227,14 +247,110 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
             // Only draw polygon if there are at least 3 points
             if (objPolygonOptions.getPoints().size() > 2) {
-                Polygon objPolyline = objGoogleMap.addPolygon(objPolygonOptions);
-                objPolyline.setFillColor(0x7F00FF00);
+                showPolygon();
             } else {
                 showToast("Not enough points to form a polygon");
             }
 
             objPolygonOptions = null;
         }
+    }
+
+    private void showPolygon() {
+        Polygon objPolyline = objGoogleMap.addPolygon(objPolygonOptions);
+        objPolyline.setFillColor(0x7F00FF00);
+        double dblArea = getPolygonArea();
+        double dblCentroidLat = getCentroidLat(dblArea);
+        double dblCentroidLng = getCentroidLng(dblArea);
+        dblArea *= LATLNG_TO_METER_RATE;
+        dblArea = Math.abs(Math.round(dblArea));
+        boolean bolIsKM = false;
+
+        if (dblArea >= MAX_SQUARE_METER) {
+            bolIsKM = true;
+            dblArea /= 1000000;
+        }
+
+        String strTitle = getCentroidTitle(dblArea, bolIsKM);
+        MarkerOptions objMarker = new MarkerOptions()
+                .position(new LatLng(dblCentroidLat, dblCentroidLng))
+                .title(strTitle)
+                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE));
+        objGoogleMap.addMarker(objMarker);
+    }
+
+    private String getCentroidTitle(double dblArea, boolean bolIsKM) {
+        DecimalFormatSymbols objFormatSymbols = new DecimalFormatSymbols(Locale.GERMANY);
+        objFormatSymbols.setDecimalSeparator(',');
+        objFormatSymbols.setGroupingSeparator('.');
+        DecimalFormat decimalFormat = new DecimalFormat("#,##0.0", objFormatSymbols);
+        String strTitle = "Area is: " + decimalFormat.format(dblArea) + " square ";
+
+        if (bolIsKM) {
+            strTitle += "kilo";
+        }
+
+        strTitle += "meters";
+        return strTitle;
+    }
+
+    private double getPolygonArea() {
+        double dblArea = 0;
+
+        for (int i = 0; i < objPolygonOptions.getPoints().size(); ++i) {
+            LatLng objCurrentPoint = objPolygonOptions.getPoints().get(i);
+            LatLng objNextPoint;
+
+            if (i == objPolygonOptions.getPoints().size() - 1) {
+                objNextPoint = objPolygonOptions.getPoints().get(0);
+            } else {
+                objNextPoint = objPolygonOptions.getPoints().get(i + 1);
+            }
+
+            dblArea += objCurrentPoint.latitude * objNextPoint.longitude - objNextPoint.latitude * objCurrentPoint.longitude;
+        }
+
+        return dblArea / 2;
+    }
+
+    private double getCentroidLat(double dblArea) {
+        double dblLat = 0;
+
+        for (int i = 0; i < objPolygonOptions.getPoints().size(); ++i) {
+            LatLng objCurrentPoint = objPolygonOptions.getPoints().get(i);
+            LatLng objNextPoint;
+
+            if (i == objPolygonOptions.getPoints().size() - 1) {
+                objNextPoint = objPolygonOptions.getPoints().get(0);
+            } else {
+                objNextPoint = objPolygonOptions.getPoints().get(i + 1);
+            }
+
+            dblLat += (objCurrentPoint.latitude + objNextPoint.latitude) *
+                    (objCurrentPoint.latitude * objNextPoint.longitude - objNextPoint.latitude * objCurrentPoint.longitude);
+        }
+
+        return dblLat / (6 * dblArea);
+    }
+
+    private double getCentroidLng(double dblArea) {
+        double dblLng = 0;
+
+        for (int i = 0; i < objPolygonOptions.getPoints().size(); ++i) {
+            LatLng objCurrentPoint = objPolygonOptions.getPoints().get(i);
+            LatLng objNextPoint;
+
+            if (i == objPolygonOptions.getPoints().size() - 1) {
+                objNextPoint = objPolygonOptions.getPoints().get(0);
+            } else {
+                objNextPoint = objPolygonOptions.getPoints().get(i + 1);
+            }
+
+            dblLng += (objCurrentPoint.longitude + objNextPoint.longitude) *
+                    (objCurrentPoint.latitude * objNextPoint.longitude - objNextPoint.latitude * objCurrentPoint.longitude);
+        }
+
+        return dblLng / (6 * dblArea);
     }
 
     @Override

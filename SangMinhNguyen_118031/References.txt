@@ -2,3 +2,7 @@
 2. Using Gson library to convert objects to JSON and store in SharedPreferences: http://stackoverflow.com/questions/7145606/how-android-sharedpreferences-save-store-object
 3. Remove all markers: http://stackoverflow.com/questions/1544739/google-maps-api-v3-how-to-remove-all-markers
 4. Make polygon transparent: http://stackoverflow.com/questions/19241329/polygon-fill-is-not-semi-transparent-android-maps-v2
+5. How to calculate area and centroid of a polygon: http://www.seas.upenn.edu/~sys502/extra_materials/Polygon%20Area%20and%20Centroid.pdf
+6. Change color of markers: http://stackoverflow.com/questions/16598169/changing-colour-of-markers-google-map-v2-android
+7. Convert latitude and longitude to kilometer: http://stackoverflow.com/questions/639695/how-to-convert-latitude-or-longitude-to-meters
+8. Format number: http://javadevnotes.com/java-double-to-string-examples and http://stackoverflow.com/questions/5054132/how-to-change-the-decimal-separator-of-decimalformat-from-comma-to-dot-point
